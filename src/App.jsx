@@ -12,7 +12,7 @@ const USAGE_OPTIONS = [
 
 const EXTERIOR_OPTIONS = [
   { id: 'ext-black', name: 'Tiefschwarz Uni', colorCode: '#1c1c1c' },
-  { id: 'ext-white', name: 'Alpinweiß Metallic', colorCode: '#f0f0f0' },
+  { id: 'ext-white', name: 'Alpinweiß', colorCode: '#f0f0f0' },
   { id: 'ext-blue', name: 'Phytonic Blau Metallic', colorCode: '#002e6e' },
   { id: 'ext-green', name: 'Signal Gelb Uni', colorCode: '#FFD700' }, // Jetzt Gelb
 ];
