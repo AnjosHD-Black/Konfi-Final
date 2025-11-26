@@ -1,426 +1,472 @@
-import React, { useState, useMemo } from 'react';
-import { Palette, Car, Trello, Aperture, User, Users, Command, Monitor, Smartphone, Briefcase, ChevronRight } from 'lucide-react'; 
+import React, { useState, useMemo, useCallback } from 'react';
+// Icon-Importe für die Darstellung in den Optionen
+import { Palette, Key, Trello, Zap, Gauge, Box, Truck, Check, X } from 'lucide-react'; 
 
-// --- 0. Basisdaten (Preise entfernt für minimalistisches UI) ---
+// --- 0. Konfiguration der Icons und Farben ---
+// Eine Map von Option-IDs zu den zugehörigen Lucide Icons
+const ICON_MAP = {
+  'ext': Palette,
+  'int': Trello,
+  'wheel': Gauge,
+  'trim': Box,
+  'usage': Truck
+};
 
-// --- 1. Definierte Optionen (ohne Preise) ---
+// --- Modale Komponente für Vollbildansicht ---
+const ImageModal = ({ imageUrl, onClose }) => {
+    if (!imageUrl) return null;
 
+    return (
+        // Overlay (Klicken auf den Hintergrund schließt das Modal)
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+            onClick={onClose}
+        >
+            <div 
+                className="relative bg-white dark:bg-gray-900 rounded-xl max-w-4xl w-full max-h-full overflow-hidden"
+                onClick={(e) => e.stopPropagation()} // Verhindert, dass Klick im Bild das Modal schließt
+            >
+                {/* Schließen Button */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 bg-gray-900/50 hover:bg-gray-900 text-white rounded-full transition z-50"
+                    aria-label="Schließen"
+                >
+                    <X size={24} />
+                </button>
+
+                {/* Bild */}
+                <img
+                    src={imageUrl}
+                    alt="Vergrößerte Ansicht"
+                    className="w-full h-auto object-contain max-h-[90vh] filter-none"
+                    onError={(e) => { e.target.src = 'https://placehold.co/800x450/cccccc/000000?text=Fehler'; }}
+                />
+            </div>
+        </div>
+    );
+};
+
+
+// Generische Komponente für die große Bildanzeige (Außen- und Innenansicht)
+const LargeImageCard = ({ category, optionName, imageUrl, onClick }) => {
+  const Icon = ICON_MAP[category];
+  const title = category === 'exterior' ? 'Außenansicht' : 'Innenraum';
+
+  return (
+    <div 
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden h-fit cursor-pointer transition hover:shadow-2xl"
+        onClick={onClick} // Klick öffnet das Modal
+    >
+      <div className="relative">
+        {/* Das Bild selbst - object-contain stellt sicher, dass nichts abgeschnitten wird */}
+        <img
+          src={imageUrl}
+          alt={`Ansicht: ${optionName}`}
+          className="w-full h-auto object-contain bg-gray-50 dark:bg-gray-900"
+          style={{ minHeight: category === 'exterior' ? '250px' : '200px' }} // Mindesthöhe für bessere Stabilität
+          onError={(e) => {
+            e.target.onerror = null;
+            // Fallback, wenn das Bild nicht geladen werden kann
+            e.target.src = 'https://placehold.co/800x450/cccccc/000000?text=Fehler%3A+Bild+fehlt';
+          }}
+        />
+      </div>
+      
+      {/* Detail-Anzeige nur für die Überschrift (minimalistisch) */}
+      <div className="p-4 border-t border-gray-100 dark:border-gray-700">
+        <div className="flex items-center text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {Icon && <Icon size={20} className="mr-2 text-blue-600 dark:text-blue-400" />}
+          {title} | {optionName}
+        </div>
+        <p className="mt-1 text-xs text-gray-500">Zum Vergrößern klicken</p>
+      </div>
+    </div>
+  );
+};
+
+// Komponente für die Detail-Zusammenfassung und Statusanzeige
+const ConfiguratorDetails = ({ config }) => {
+  const { usage, exterior, interior, wheel, trim } = config;
+
+  // Hilfsfunktion zur Darstellung eines Details
+  const DetailItem = ({ icon, label, value }) => {
+    const IconComponent = icon;
+    return (
+      <div className="flex justify-between items-start py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+        <div className="flex items-center text-gray-700 dark:text-gray-300">
+          <IconComponent size={18} className="mr-3 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+          <span className="font-medium">{label}:</span>
+        </div>
+        <span className="text-gray-900 dark:text-gray-100 font-semibold text-right flex-shrink-0 ml-4">
+          {value}
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 border-b pb-2 border-blue-500/50">
+        Ihre Zusammenfassung
+      </h2>
+      
+      <div className="space-y-1">
+        <DetailItem icon={Truck} label="Nutzungsart" value={usage.name} />
+        <DetailItem icon={Palette} label="Lackierung" value={exterior.name} />
+        <DetailItem icon={Trello} label="Interieur" value={interior.name} />
+        <DetailItem icon={Gauge} label="Felgen" value={wheel.name} />
+        <DetailItem icon={Box} label="Zierleisten" value={trim.name} />
+      </div>
+      
+      <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+        <Zap size={16} className="inline mr-2" /> Für eine optimale Darstellung auf iPhone/iPad optimiert.
+      </div>
+    </div>
+  );
+};
+
+// Generischer Button für alle Auswahl-Optionen
+const OptionButton = ({ option, isSelected, onClick, category }) => {
+  const isImageOption = category === 'int' || category === 'wheel';
+  const isColorSwatch = category === 'ext';
+
+  // --- Spezielles Styling für Farbfelder (wie im Original-BMW-Konfigurator) ---
+  if (isColorSwatch) {
+    return (
+      <button
+        onClick={onClick}
+        className={`
+          flex flex-col items-center justify-center rounded-full w-12 h-12 relative transition duration-200 
+          ${isSelected
+            ? 'border-4 border-blue-600 ring-2 ring-white shadow-lg'
+            : 'border-2 border-gray-300 hover:border-blue-300'
+          }
+        `}
+      >
+        <div 
+          className="w-full h-full rounded-full" 
+          style={{ backgroundColor: option.colorCode }}
+        ></div>
+        {isSelected && (
+          // Das Check-Icon wird nur angezeigt, wenn die Option ausgewählt ist
+          <Check className="absolute text-white" size={16} style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.5))' }} />
+        )}
+      </button>
+    );
+  }
+
+  // --- Styling für Standard-Kacheln (Interieur, Felgen, Zierleisten, Nutzung) ---
+  const Icon = ICON_MAP[category];
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex flex-col items-center rounded-xl transition duration-200 w-full text-center p-3 border 
+        ${isSelected
+          ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
+          : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'
+        }
+      `}
+    >
+      {/* 1. Bild/Icon-Vorschau */}
+      <div className={`relative w-full overflow-hidden ${isImageOption ? 'h-20' : 'h-8'} rounded-lg mb-1 flex items-center justify-center`}>
+        {isImageOption ? (
+          // Bild-Option (Interieur-Textur / Felgenbild)
+          <img
+            src={option.previewUrl}
+            alt={option.name}
+            className="w-full h-full object-cover filter-none"
+            onError={(e) => { e.target.src = 'https://placehold.co/100x100/aaaaaa/000000?text=TEXTUR'; }}
+          />
+        ) : (
+          // Icon-Option (Nutzung / Zierleisten)
+          <Icon size={24} className={isSelected ? 'text-white' : 'text-gray-500'} />
+        )}
+      </div>
+
+      {/* 2. Name */}
+      <span className={`text-xs font-semibold truncate w-full mt-2 ${isSelected ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>{option.name}</span>
+    </button>
+  );
+};
+
+
+// --- DATENSTRUKTUREN ---
+// **********************************************
+
+// --- 1. NUTZUNGSART ---
 const USAGE_OPTIONS = [
-    { id: 'usage-private', name: 'Privatfahrzeug', icon: User },
-    { id: 'usage-authority', name: 'Behördenfahrzeug', icon: Users },
+  { id: 'usage-private', name: 'Privatfahrzeug', icon: Key },
+  { id: 'usage-authority', name: 'Behördenfahrzeug', icon: Zap },
 ];
 
+// --- 2. LACKIERUNG ---
 const EXTERIOR_OPTIONS = [
   { id: 'ext-black', name: 'Tiefschwarz Uni', colorCode: '#1c1c1c' },
   { id: 'ext-white', name: 'Alpinweiß', colorCode: '#f0f0f0' },
   { id: 'ext-blue', name: 'Phytonic Blau Metallic', colorCode: '#002e6e' },
-  { id: 'ext-green', name: 'Signal Gelb Uni', colorCode: '#FFD700' }, // Jetzt Gelb
+  { id: 'ext-yellow', name: 'Signal Gelb Uni', colorCode: '#FFD700' },
 ];
 
+// --- 3. INTERIEUR ---
 const INTERIOR_OPTIONS = [
   { id: 'int-mokka', name: 'Mokka-Leder', colorCode: '#6f4e37' },
   { id: 'int-beige', name: 'Beige Sensatec', colorCode: '#e6ccb3' },
   { id: 'int-black', name: 'Schwarz Alcantara', colorCode: '#000000' },
 ];
 
-const WHEEL_OPTIONS = [
-    { id: 'wheel-a', name: '19-Zoll Doppelspeiche', imageUrl: 'https://i.imgur.com/wRqvtwP.png' },
-    { id: 'wheel-b', name: '20-Zoll M Bicolor', imageUrl: 'https://i.imgur.com/ZPTkYpb.png' },
-];
-
-// NEUE OPTION: Zierleisten
-const TRIM_OPTIONS = [
-    { id: 'trim-shadow', name: 'Shadow Line Hochglanz', icon: Command },
-    { id: 'trim-chrome', name: 'Chromlinie Hochglanz', icon: Monitor },
-];
-
-// --- BILDER FÜR GROSSE INNENRAUM-ANSICHT (z.B. Cockpit) ---
-const INTERIOR_PREVIEW_IMAGES = {
-    // Diese Bilder erscheinen in der GROSSEN INNANSICHT.
-    'int-mokka': 'https://i.imgur.com/wEac2ki.png', 
-    'int-beige': 'https://i.imgur.com/HgzTvCu.png', 
-    'int-black': 'https://i.imgur.com/h7LkB0H.png', 
-};
-
-// --- BILDER FÜR TEXTUR-VORSCHAU IN BUTTONS (Kleine Textur-Kacheln) ---
 const INTERIOR_TEXTURE_IMAGES = {
-    // Diese Bilder erscheinen in den KLEINEN AUSWAHL-BUTTONS.
-    'int-mokka': 'https://i.imgur.com/RVpAoPF.png', 
-    'int-beige': 'https://i.imgur.com/edqvrJu.png', 
-    'int-black': 'https://i.imgur.com/eDVkOTN.png', 
+  'int-mokka': 'https://i.imgur.com/RVpAoPF.png', // Mokka Textur
+  'int-beige': 'https://i.imgur.com/edqvrJu.png', // Beige Textur
+  'int-black': 'https://i.imgur.com/eDVkOTN.png', // Schwarz Textur
 };
 
-// --- 2. BILD-ZUORDNUNG FÜR GROSSES HAUPTBILD (Ext + Int + Wheel) ---
-// Der Schlüssel ist: 'ext-ID_int-ID_wheel-ID'
-const COMBINATION_IMAGES = {};
-
-// Generator für Platzhalter und Integration der vorhandenen Bilder
-const ALL_EXTERIOR_OPTIONS = EXTERIOR_OPTIONS.map(opt => opt.id);
-const ALL_INTERIOR_OPTIONS = INTERIOR_OPTIONS.map(opt => opt.id);
-const ALL_WHEEL_OPTIONS = WHEEL_OPTIONS.map(opt => opt.id);
-
-ALL_EXTERIOR_OPTIONS.forEach(extId => {
-    ALL_INTERIOR_OPTIONS.forEach(intId => {
-        
-        const oldKey = `${extId}_${intId}`;
-        let baseImageUrl = '';
-        
-        // 1. Zuerst die hochgeladenen Bilder anhand des EXT/INT-Schlüssels zuweisen
-        if (oldKey === 'ext-black_int-black') baseImageUrl = 'https://i.imgur.com/KmelzwG.png'; 
-        else if (oldKey === 'ext-black_int-mokka') baseImageUrl = 'https://i.imgur.com/ZOC3Qaq.png';
-        else if (oldKey === 'ext-black_int-beige') baseImageUrl = 'https://i.imgur.com/h8654lq.png';
-        else if (extId === 'ext-white') baseImageUrl = 'https://i.imgur.com/AJUSK3k.png';
-        else if (extId === 'ext-blue') baseImageUrl = 'https://i.imgur.com/yhyQl5e.png';
-        else if (extId === 'ext-green') baseImageUrl = 'https://i.imgur.com/I2PUV3C.png';
-        else {
-            // Fallback für nicht abgedeckte Kombinationen
-            const extName = EXTERIOR_OPTIONS.find(opt => opt.id === extId)?.name.toUpperCase() || 'EXT';
-            const intName = INTERIOR_OPTIONS.find(opt => opt.id === intId)?.name.toUpperCase() || 'INT';
-            baseImageUrl = `https://placehold.co/800x450/4f46e5/ffffff?text=${extName}+|+${intName}`;
-        }
-
-        // 2. Dieses Bild nun ALLEN Felgen-Optionen zuweisen (da wir beschlossen haben, dass beide Felgen das gleiche Bild verwenden)
-        ALL_WHEEL_OPTIONS.forEach(wheelId => { 
-            const key = `${extId}_${intId}_${wheelId}`;
-            
-            let finalImageUrl = baseImageUrl;
-            if (baseImageUrl.includes('placehold.co')) {
-                 const wheelName = WHEEL_OPTIONS.find(opt => opt.id === wheelId)?.name.toUpperCase() || 'FELGE';
-                 finalImageUrl += ` | ${wheelName.replace(/ /g, '+')}`;
-            }
-
-            COMBINATION_IMAGES[key] = finalImageUrl;
-        });
-    });
-});
-
-
-// Komponente für die großen Bildkarten
-const LargeImageCard = ({ title, imageUrl, compactTitle }) => (
-    <div className="bg-white rounded-xl overflow-hidden shadow-md border border-gray-200">
-        {/* Korrigierte, vereinfachte Titeldarstellung */}
-        <h2 className="text-sm font-semibold p-3 text-gray-800 border-b border-gray-100 flex justify-between items-center">
-            {title} <span className="text-xs font-normal text-gray-500">{compactTitle}</span>
-        </h2>
-        <img
-            src={imageUrl}
-            alt={title}
-            // object-contain, um sicherzustellen, dass nichts abgeschnitten wird
-            className="w-full h-auto object-contain transition duration-500 ease-in-out filter-none" 
-            style={{ minHeight: '180px' }} 
-            onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = 'https://placehold.co/800x450/cccccc/000000?text=Bild+nicht+gefunden';
-            }}
-        />
-    </div>
-);
-
-// Detail-Ansicht im minimalistischen Stil
-const ConfiguratorDetails = ({ config }) => {
-    // Einfache Liste der gewählten Optionen
-    const options = [
-        { name: 'Nutzungsart', value: config.usage.name, icon: config.usage.icon },
-        { name: 'Lackierung', value: config.exterior.name, colorCode: config.exterior.colorCode, icon: Car },
-        { name: 'Interieur', value: config.interior.name, colorCode: config.interior.colorCode, icon: Trello },
-        { name: 'Felgen', value: config.wheel.name, icon: Aperture },
-        { name: 'Zierleisten', value: config.trim.name, icon: config.trim.icon },
-    ];
-    
-    return (
-        <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200 mb-8">
-            <h1 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <ChevronRight className="w-5 h-5 mr-1 text-blue-600" /> Ihre Zusammenfassung
-            </h1>
-            
-            <ul className="space-y-3">
-                {options.map((opt) => (
-                    // Korrektur: Die Listenelemente sind jetzt "flex" und stabil
-                    <li key={opt.name} className="flex items-center justify-between border-b border-gray-100 pb-2">
-                        <div className="flex items-center space-x-2 text-gray-700">
-                            {opt.icon && <opt.icon className="text-gray-400" size={18} />}
-                            <span className="font-semibold">{opt.name}:</span>
-                        </div>
-                        <span className="flex items-center space-x-2">
-                            {opt.colorCode && (
-                                <span className="w-3 h-3 rounded-full border border-gray-300" style={{ backgroundColor: opt.colorCode }}></span>
-                            )}
-                            <span className="font-medium text-gray-800">{opt.value}</span>
-                        </span>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
+const INTERIOR_PREVIEW_IMAGES = {
+  'int-mokka': 'https://i.imgur.com/wEac2ki.png', // Mokka Innenansicht
+  'int-beige': 'https://i.imgur.com/HgzTvCu.png', // Beige Innenansicht
+  'int-black': 'https://i.imgur.com/h7LkB0H.png', // Schwarz Innenansicht
 };
 
-// Funktion für einen Konfigurations-Button (minimalistischer Stil)
-const OptionButton = ({ option, isSelected, onClick, Icon, previewUrl }) => {
-  if (!option) return null;
+// --- 4. FELGEN ---
+const WHEEL_OPTIONS = [
+  { id: 'wheel-a', name: '19-Zoll Doppelspeiche', previewUrl: 'https://i.imgur.com/wRqvtwP.png' },
+  { id: 'wheel-b', name: '20-Zoll M Bicolor', previewUrl: 'https://i.imgur.com/ZPTkYpb.png' },
+];
 
-  const isWheel = option.id.startsWith('wheel-');
-  const isInterior = option.id.startsWith('int-');
-  const isImageButton = isWheel || isInterior; // NEUE PRÜFUNG
+// --- 5. ZIERLEISTEN ---
+const TRIM_OPTIONS = [
+  { id: 'trim-shadow', name: 'Shadow Line Hochglanz', icon: Box },
+  { id: 'trim-chrome', name: 'Chromlinie Exterieur', icon: Box },
+];
 
-  const getPreviewContent = () => {
-    // Felgen- und Interieur-Vorschau
-    if (isImageButton) {
-        const url = isWheel ? option.imageUrl : previewUrl;
-        const altText = isWheel ? option.name : `${option.name} Textur`;
-        
-        return (
-            // Flexbox, um Bild und Text in der Zelle auszurichten
-            <div className="relative w-full h-full flex items-center justify-center">
-                <div className="w-full h-full rounded-md overflow-hidden">
-                    <img 
-                        src={url} 
-                        alt={altText} 
-                        // Filter-Fix und object-cover, um den Container komplett zu füllen
-                        className="w-full h-full object-cover filter-none" 
-                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/100x75/dddddd/000000?text=Vorschau'; }}
-                    />
-                </div>
-                {/* Kleine Farbanzeige im Eck des Interieur-Bildes */}
-                {isInterior && (
-                    <div className={`absolute bottom-1 right-1 w-3 h-3 rounded-full border-2 ${isSelected ? 'border-white' : 'border-gray-200'} shadow-md`} 
-                        style={{ backgroundColor: option.colorCode }}>
-                    </div>
-                )}
-            </div>
-        );
-    }
-    
-    // Für Außenfarben (einfache Farb-Swatches)
-    if (option.colorCode) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div 
-                    className="w-7 h-7 rounded-full border-4" 
-                    style={{ backgroundColor: option.colorCode, borderColor: isSelected ? 'white' : '#6b7280' }}
-                ></div>
-            </div>
-        );
-    }
 
-    // Für Nutzungsart und Zierleisten (Icons)
-    return (
-        <div className="flex items-center justify-center h-full">
-            {Icon && <Icon size={20} />}
-        </div>
-    );
-  };
+// --- BILD-ZUORDNUNG (AUSSENANSICHT) ---
+const COMBINATION_IMAGES = {
+    // SCHWARZ AUSSEN
+    'ext-black_int-mokka': 'https://i.imgur.com/KmelzwG.png',
+    'ext-black_int-beige': 'https://i.imgur.com/KmelzwG.png',
+    'ext-black_int-black': 'https://i.imgur.com/KmelzwG.png', 
 
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        flex flex-col rounded-xl transition duration-200 w-full text-center border-2 
-        ${isSelected
-          ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30 border-blue-600 transform scale-[1.03]'
-          : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-200'
-        }
-        ${isImageButton ? 'p-1 aspect-square' : 'p-3 aspect-auto'} 
-      `}
-    >
-      {/* Container für das Vorschau-Element */}
-      <div className={`w-full ${isImageButton ? 'h-20 mb-1' : 'h-10'} flex items-center justify-center`}> 
-          {getPreviewContent()}
-      </div>
+    // WEISS AUSSEN
+    'ext-white_int-mokka': 'https://i.imgur.com/AJUSK3k.png',
+    'ext-white_int-beige': 'https://i.imgur.com/AJUSK3k.png',
+    'ext-white_int-black': 'https://i.imgur.com/AJUSK3k.png',
 
-      <span className={`text-xs font-medium truncate w-full mt-1 ${isSelected ? 'text-white' : 'text-gray-800'}`}>
-        {option.name}
-      </span>
-    </button>
-  );
+    // BLAU AUSSEN
+    'ext-blue_int-mokka': 'https://i.imgur.com/yhyQl5e.png',
+    'ext-blue_int-beige': 'https://i.imgur.com/yhyQl5e.png',
+    'ext-blue_int-black': 'https://i.imgur.com/yhyQl5e.png',
+
+    // GELB AUSSEN
+    'ext-yellow_int-mokka': 'https://i.imgur.com/I2PUV3C.png',
+    'ext-yellow_int-beige': 'https://i.imgur.com/I2PUV3C.png',
+    'ext-yellow_int-black': 'https://i.imgur.com/I2PUV3C.png',
 };
+// **********************************************
 
 
 export default function App() {
+  // --- STATES ---
   const [selectedUsageId, setSelectedUsageId] = useState(USAGE_OPTIONS[0].id);
   const [selectedExteriorId, setSelectedExteriorId] = useState(EXTERIOR_OPTIONS[0].id);
   const [selectedInteriorId, setSelectedInteriorId] = useState(INTERIOR_OPTIONS[0].id);
   const [selectedWheelId, setSelectedWheelId] = useState(WHEEL_OPTIONS[0].id);
-  const [selectedTrimId, setSelectedTrimId] = useState(TRIM_OPTIONS[0].id); // NEU: Trim State
+  const [selectedTrimId, setSelectedTrimId] = useState(TRIM_OPTIONS[0].id);
+  const [modalImageUrl, setModalImageUrl] = useState(null); // State für Modal
 
-  
+
+  // --- BERECHNETE KONFIGURATION ---
   const currentConfig = useMemo(() => {
-    const selectedUsage = USAGE_OPTIONS.find(opt => opt.id === selectedUsageId) || USAGE_OPTIONS[0];
-    const selectedExterior = EXTERIOR_OPTIONS.find(opt => opt.id === selectedExteriorId) || EXTERIOR_OPTIONS[0];
-    const selectedInterior = INTERIOR_OPTIONS.find(opt => opt.id === selectedInteriorId) || INTERIOR_OPTIONS[0];
-    const selectedWheel = WHEEL_OPTIONS.find(opt => opt.id === selectedWheelId) || WHEEL_OPTIONS[0];
-    const selectedTrim = TRIM_OPTIONS.find(opt => opt.id === selectedTrimId) || TRIM_OPTIONS[0]; // NEU: Trim Config
+    // Ausgewählte Optionen finden
+    const selectedUsage = USAGE_OPTIONS.find(opt => opt.id === selectedUsageId);
+    const selectedExterior = EXTERIOR_OPTIONS.find(opt => opt.id === selectedExteriorId);
+    const selectedInterior = INTERIOR_OPTIONS.find(opt => opt.id === selectedInteriorId);
+    const selectedWheel = WHEEL_OPTIONS.find(opt => opt.id === selectedWheelId);
+    const selectedTrim = TRIM_OPTIONS.find(opt => opt.id === selectedTrimId);
 
-    const combinationKey = `${selectedExterior.id}_${selectedInterior.id}_${selectedWheel.id}`;
-    const imageUrl = COMBINATION_IMAGES[combinationKey] || COMBINATION_IMAGES[`${EXTERIOR_OPTIONS[0].id}_${INTERIOR_OPTIONS[0].id}_${WHEEL_OPTIONS[0].id}`];
+    // Bild-Key erstellen (Ignoriert Rad und Zierleiste, da die Hauptbilder nur von Exterieur/Interieur abhängen)
+    const exteriorKey = `${selectedExterior.id}_${selectedInterior.id}`;
     
-    const interiorPreviewUrl = INTERIOR_PREVIEW_IMAGES[selectedInterior.id] || INTERIOR_PREVIEW_IMAGES[INTERIOR_OPTIONS[0].id];
-    
+    // Fallback, wenn der Schlüssel nicht gefunden wird
+    const exteriorImageUrl = COMBINATION_IMAGES[exteriorKey] || 'https://placehold.co/800x450/cccccc/000000?text=Bild+fehlt'; 
+    const interiorImageUrl = INTERIOR_PREVIEW_IMAGES[selectedInterior.id] || 'https://placehold.co/800x450/cccccc/000000?text=Innenansicht+fehlt';
 
     return {
-        name: `${selectedExterior.name} / ${selectedInterior.name} / ${selectedWheel.name}`,
-        usage: selectedUsage,
-        exterior: selectedExterior,
-        interior: selectedInterior,
-        wheel: selectedWheel,
-        trim: selectedTrim, // NEU: Trim
-        imageUrl: imageUrl, // Außenansicht
-        interiorPreviewUrl: interiorPreviewUrl, // Innenansicht
+      usage: selectedUsage,
+      exterior: selectedExterior,
+      interior: selectedInterior,
+      wheel: selectedWheel,
+      trim: selectedTrim,
+      exteriorImageUrl: exteriorImageUrl,
+      interiorImageUrl: interiorImageUrl,
     };
   }, [selectedUsageId, selectedExteriorId, selectedInteriorId, selectedWheelId, selectedTrimId]);
 
+  // Handler zum Öffnen des Modals
+  const openModal = useCallback((url) => {
+    setModalImageUrl(url);
+  }, []);
 
+  // Handler zum Schließen des Modals
+  const closeModal = useCallback(() => {
+    setModalImageUrl(null);
+  }, []);
+
+
+  // --- UI RENDERING ---
   return (
-    <div className={`min-h-screen font-sans antialiased bg-gray-100`}> 
-        <div className="max-w-7xl mx-auto lg:p-6 p-4"> 
+    // Hauptcontainer für die App (Light Mode)
+    <div className="min-h-screen bg-gray-100 font-sans antialiased flex justify-center">
+      <div className="w-full max-w-7xl pt-8 pb-12 px-4 md:px-6">
+
+        {/* Header und Titel */}
+        <header className="py-4 mb-8">
+          <h1 className="text-4xl font-extrabold text-gray-900">
+            BMW Konfigurator
+          </h1>
+          <p className="mt-2 text-md text-gray-500">
+            Stellen Sie Ihr individuelles Modell zusammen.
+          </p>
+        </header>
+
+        {/* HAUPT-LAYOUT: Bilder (Links) vs. Optionen (Rechts) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          
+          {/* LINKES FELD: Bilder und Zusammenfassung (Sticky auf großen Screens) */}
+          <div className="lg:col-span-7 space-y-10 lg:sticky lg:top-8 lg:h-fit">
             
-            {/* Header (Nur für Mobile sichtbar) */}
-            <header className="py-4 mb-6 border-b border-gray-200 lg:hidden">
-                <h1 className="text-3xl font-extrabold text-gray-900">
-                    Fahrzeug-Konfigurator
-                </h1>
-                <p className="mt-1 text-base text-gray-500">
-                    Stellen Sie Ihr individuelles Modell zusammen.
-                </p>
-            </header>
-
-            {/* --- HAUPT-LAYOUT GRID --- */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                {/* === SPALTE 1: BILDER UND ZUSAMMENFASSUNG (Sticky auf Desktop) === */}
-                <div className="lg:col-span-5 relative">
-                    <div className="lg:sticky lg:top-6">
-                        {/* Desktop-Header (Nur für Desktop sichtbar) */}
-                        <header className="pb-6 mb-4 hidden lg:block">
-                            <h1 className="text-4xl font-extrabold text-gray-900">
-                                BMW Konfigurator
-                            </h1>
-                            <p className="mt-1 text-lg text-gray-500">
-                                Stellen Sie Ihr individuelles Modell zusammen.
-                            </p>
-                        </header>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-6 mb-8">
-                            {/* Außenansicht (Links) */}
-                            <LargeImageCard 
-                                title={`Außenansicht`}
-                                compactTitle={currentConfig.exterior.name}
-                                imageUrl={currentConfig.imageUrl}
-                            />
-                            {/* Innenansicht (Rechts) */}
-                            <LargeImageCard 
-                                title={`Innenraum`}
-                                compactTitle={currentConfig.interior.name}
-                                imageUrl={currentConfig.interiorPreviewUrl}
-                            />
-                        </div>
-
-                        {/* --- Konfigurator-Details (Zusammenfassung) --- */}
-                        <ConfiguratorDetails config={currentConfig} />
-                    </div>
-                </div>
-
-                {/* === SPALTE 2: AUSWAHL-OPTIONEN (Scrollbar) === */}
-                <div className="lg:col-span-7 space-y-8 bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-100">
-                    
-                    {/* Nutzungsart-Auswahl */}
-                    <section className="border-b pb-6 border-gray-100">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <Users className="mr-2 text-blue-500" size={20} /> 1. Nutzungsart
-                        </h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            {USAGE_OPTIONS.map(option => (
-                            <OptionButton
-                                key={option.id}
-                                option={option}
-                                isSelected={option.id === selectedUsageId}
-                                onClick={() => setSelectedUsageId(option.id)}
-                                Icon={option.icon}
-                            />
-                            ))}
-                        </div>
-                    </section>
-                
-                    
-                    {/* Außenfarben-Auswahl */}
-                    <section className="border-b pb-6 border-gray-100">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <Car className="mr-2 text-blue-500" size={20} /> 2. Lackierung
-                        </h2>
-                        <div className="grid grid-cols-4 gap-4">
-                            {EXTERIOR_OPTIONS.map(option => (
-                            <OptionButton
-                                key={option.id}
-                                option={option}
-                                isSelected={option.id === selectedExteriorId}
-                                onClick={() => setSelectedExteriorId(option.id)}
-                                Icon={Palette}
-                            />
-                            ))}
-                        </div>
-                    </section>
-                    
-                    {/* Innenraum-Auswahl */}
-                    <section className="border-b pb-6 border-gray-100">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <Trello className="mr-2 text-blue-500" size={20} /> 3. Interieur
-                        </h2>
-                        <div className="grid grid-cols-3 gap-4">
-                            {INTERIOR_OPTIONS.map(option => (
-                            <OptionButton
-                                key={option.id}
-                                option={option}
-                                isSelected={option.id === selectedInteriorId}
-                                onClick={() => setSelectedInteriorId(option.id)}
-                                Icon={Trello}
-                                previewUrl={INTERIOR_TEXTURE_IMAGES[option.id]}
-                            />
-                            ))}
-                        </div>
-                    </section>
-
-                    {/* Felgen-Auswahl */}
-                    <section className="border-b pb-6 border-gray-100">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <Aperture className="mr-2 text-blue-500" size={20} /> 4. Felgen
-                        </h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            {WHEEL_OPTIONS.map(option => (
-                            <OptionButton
-                                key={option.id}
-                                option={option}
-                                isSelected={option.id === selectedWheelId}
-                                onClick={() => setSelectedWheelId(option.id)}
-                                Icon={Aperture}
-                            />
-                            ))}
-                        </div>
-                    </section>
-                    
-                    {/* Zierleisten-Auswahl */}
-                    <section>
-                        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <Briefcase className="mr-2 text-blue-500" size={20} /> 5. Zierleisten
-                        </h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            {TRIM_OPTIONS.map(option => (
-                            <OptionButton
-                                key={option.id}
-                                option={option}
-                                isSelected={option.id === selectedTrimId}
-                                onClick={() => setSelectedTrimId(option.id)}
-                                Icon={option.icon}
-                            />
-                            ))}
-                        </div>
-                    </section>
-                </div>
+            {/* 1. Außenansicht (Dominantes Bild) */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <LargeImageCard 
+                    category="exterior"
+                    optionName={currentConfig.exterior.name}
+                    imageUrl={currentConfig.exteriorImageUrl}
+                    onClick={() => openModal(currentConfig.exteriorImageUrl)} // Klick-Handler
+                />
             </div>
+
+            {/* 2. Innenansicht (Kleine Vorschau unten links, um Platz zu sparen) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-1">
+                <LargeImageCard 
+                    category="int"
+                    optionName={currentConfig.interior.name}
+                    imageUrl={currentConfig.interiorImageUrl}
+                    onClick={() => openModal(currentConfig.interiorImageUrl)} // Klick-Handler
+                />
+              </div>
+              <div className="md:col-span-1">
+                {/* 3. Detail-Zusammenfassung (Liste der gewählten Optionen) */}
+                <ConfiguratorDetails config={currentConfig} />
+              </div>
+            </div>
+
+
+          </div>
+
+          
+          {/* RECHTES FELD: Auswahl-Optionen (Scrollbar) */}
+          <div className="lg:col-span-5 space-y-8">
             
-            <div className="mt-12 p-4 bg-blue-50 rounded-xl text-sm text-blue-800 max-w-4xl mx-auto lg:mx-0">
-                **Hinweis:** Ihre App ist jetzt live auf Netlify veröffentlicht. Jede Änderung, die Sie committen und pushen, wird automatisch aktualisiert!
-            </div>
-        </div>
+            {/* Sektion: 1. Nutzungsart */}
+            <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Truck size={18} className="mr-3 text-blue-600" /> 1. Nutzungsart
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {USAGE_OPTIONS.map(option => (
+                  <OptionButton
+                    key={option.id}
+                    option={option}
+                    isSelected={option.id === selectedUsageId}
+                    onClick={() => setSelectedUsageId(option.id)}
+                    Icon={option.icon}
+                    category="usage"
+                  />
+                ))}
+              </div>
+            </section>
+            
+            {/* Sektion: 2. Lackierung (Runde Swatches) */}
+            <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Palette size={18} className="mr-3 text-blue-600" /> 2. Lackierung
+              </h2>
+              <div className="flex flex-wrap gap-4">
+                {EXTERIOR_OPTIONS.map(option => (
+                  <OptionButton
+                    key={option.id}
+                    option={option}
+                    isSelected={option.id === selectedExteriorId}
+                    onClick={() => setSelectedExteriorId(option.id)}
+                    category="ext"
+                  />
+                ))}
+              </div>
+              <p className="mt-4 text-sm text-gray-600 font-medium">Gewählt: {currentConfig.exterior.name}</p>
+            </section>
+            
+            {/* Sektion: 3. Interieur */}
+            <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Trello size={18} className="mr-3 text-blue-600" /> 3. Interieur
+              </h2>
+              <div className="grid grid-cols-3 gap-4">
+                {INTERIOR_OPTIONS.map(option => (
+                  <OptionButton
+                    key={option.id}
+                    option={{...option, previewUrl: INTERIOR_TEXTURE_IMAGES[option.id]}}
+                    isSelected={option.id === selectedInteriorId}
+                    onClick={() => setSelectedInteriorId(option.id)}
+                    category="int"
+                  />
+                ))}
+              </div>
+            </section>
+            
+            {/* Sektion: 4. Felgen */}
+            <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Gauge size={18} className="mr-3 text-blue-600" /> 4. Felgen
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {WHEEL_OPTIONS.map(option => (
+                  <OptionButton
+                    key={option.id}
+                    option={option}
+                    isSelected={option.id === selectedWheelId}
+                    onClick={() => setSelectedWheelId(option.id)}
+                    category="wheel"
+                  />
+                ))}
+              </div>
+            </section>
+
+             {/* Sektion: 5. Zierleisten */}
+            <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Box size={18} className="mr-3 text-blue-600" /> 5. Zierleisten
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {TRIM_OPTIONS.map(option => (
+                  <OptionButton
+                    key={option.id}
+                    option={option}
+                    isSelected={option.id === selectedTrimId}
+                    onClick={() => setSelectedTrimId(option.id)}
+                    category="trim"
+                  />
+                ))}
+              </div>
+            </section>
+
+          </div>{/* Ende Rechtes Feld */}
+        </div>{/* Ende Haupt-Grid */}
+      </div>{/* Ende Max-Breite Container */}
+
+      {/* Das Modal wird außerhalb des Haupt-Containers gerendert */}
+      <ImageModal imageUrl={modalImageUrl} onClose={closeModal} />
     </div>
   );
 }
-
